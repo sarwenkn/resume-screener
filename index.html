@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Resume Screening & Ranking</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background: #2563eb;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"], textarea, input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 20px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+
+    textarea {
+      height: 120px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1e40af;
+    }
+
+    .status {
+      margin-top: 20px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .tooltip {
+      position: relative;
+      display: inline-block;
+    }
+
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      width: 200px;
+      background-color: #555;
+      color: #fff;
+      text-align: center;
+      border-radius: 6px;
+      padding: 5px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      margin-left: -100px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <header>AI Resume Screening & Ranking</header>
+
+  <div class="container">
+    <form id="resumeForm">
+      <label for="role">Target Role</label>
+      <input type="text" id="role" placeholder="e.g. Senior Backend Developer" required>
+
+      <label for="jd">Job Description (Paste full JD text)</label>
+      <textarea id="jd" placeholder="Enter the job description here..." required></textarea>
+
+      <label for="resumes">Upload Resumes (Max 10 PDFs)</label>
+      <div class="tooltip">
+        <input type="file" id="resumes" multiple accept="application/pdf" required>
+        <span class="tooltiptext">Upload up to 10 PDF resumes</span>
+      </div>
+
+      <button type="button" onclick="submitResumes()">Analyze & Generate Session</button>
+
+      <div class="status" id="status"></div>
+    </form>
+  </div>
+
+  <script>
+    const webhookURL = "https://digitald3-ai.duckdns.org/webhook/resume_screen";
+
+    async function submitResumes() {
+      const role = document.getElementById("role").value;
+      const jd = document.getElementById("jd").value;
+      const files = document.getElementById("resumes").files;
+
+      if (!role || !jd) {
+        alert("Please enter the role and job description.");
+        return;
+      }
+
+      if (files.length === 0) {
+        alert("Please upload at least one resume.");
+        return;
+      }
+
+      if (files.length > 10) {
+        alert("You can upload a maximum of 10 resumes.");
+        return;
+      }
+
+      document.getElementById("status").innerText = "Processing resumes... Please wait.";
+
+      let resumes = [];
+
+      for (let file of files) {
+        const base64 = await convertToBase64(file);
+        resumes.push({
+          candidate_id: file.name,
+          resume_file_base64: base64.split(',')[1]
+        });
+      }
+
+      try {
+        const response = await fetch(webhookURL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            role: role,
+            job_description: jd,
+            resumes: resumes
+          })
+        });
+
+        const data = await response.json();
+
+        if (!data.session_id) {
+          alert("Error: session_id not returned.");
+          return;
+        }
+
+        window.location.href = `session.html?id=${data.session_id}`;
+      } catch (err) {
+        console.error(err);
+        alert("Something went wrong. Please try again.");
+      }
+    }
+
+    function convertToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+  </script>
+</body>
+</html>

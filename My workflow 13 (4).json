@@ -1,0 +1,398 @@
+{
+  "name": "My workflow 13",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resume_screen",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        96,
+        -96
+      ],
+      "id": "65f5387b-086e-459e-b3c5-01b98629a1ae",
+      "name": "Webhook",
+      "webhookId": "f2526751-3718-40f9-80b9-2a61988ea974"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base64Data = $json.resume_file_base64;\nconst binaryBuffer = Buffer.from(base64Data, 'base64');\n\nreturn {\n  json: {\n    candidate_id: $json.candidate_id,\n    role: $json.role,\n    job_description: $json.job_description\n  },\n  binary: {\n    Your_File: {\n      data: binaryBuffer.toString('base64'),\n      mimeType: 'application/pdf',\n      fileName: 'resume.pdf'\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -96
+      ],
+      "id": "a5058741-fab9-4066-91c4-bb0502595662",
+      "name": "Binary Conversion Code"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "Your_File",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        944,
+        -96
+      ],
+      "id": "b677cf83-3736-4db3-b501-0e18ba04408f",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "65f139e4-c035-44ae-947e-9ae773432dcf",
+              "name": "text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "ee6c27e5-6a15-4b4c-9d62-1a2f04562aa0",
+              "name": "role",
+              "value": "={{ $('Binary Conversion Code').item.json.role }}",
+              "type": "string"
+            },
+            {
+              "id": "candidate-id-pass-through",
+              "name": "candidate_id",
+              "value": "={{ $('Binary Conversion Code').item.json.candidate_id }}",
+              "type": "string"
+            },
+            {
+              "id": "f66439c3-fe56-4db9-a5a8-afd6bc47d77c",
+              "name": "job_description",
+              "value": "={{ $('Binary Conversion Code').item.json.job_description }}\n",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1168,
+        -96
+      ],
+      "id": "c0e60adb-5367-4427-bacf-0862199c618b",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1376,
+        112
+      ],
+      "id": "1dfdde69-4aaf-4d6c-b067-b7237f982e1c",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "UZfOq7GhRGarEydK",
+          "name": "Fakhrul OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Role: {{$json.role}}\n\nJob Description:\n{{$json.job_description}}\n\nResume:\n{{$json.text}}\n",
+        "options": {
+          "systemMessage": "You are an unbiased, highly experienced HR professional and hiring manager. Your task is to evaluate a candidate's resume for the target role provided by the user.\n\nYou will receive:\n- A target role (e.g. \"Software Engineer\", \"HR Executive\")\n- The full resume text as plain text (may include headers, sections, tables, or noisy formatting)\n\nGENERAL GUIDELINES\n- Read the entire resume carefully and extract as much useful information as possible.\n- Be fair and objective. Do not make assumptions about age, gender, ethnicity, location, or personal background.\n- Focus on role relevance, clarity of experience, demonstrated capabilities, and overall professionalism.\n- If some information is not explicitly stated, you may infer it conservatively (especially years of experience and current role), but DO NOT invent specific companies, dates, or credentials that are not supported by the text.\n- If something truly cannot be determined, return null for that field instead of guessing.\n\nCandidate Snapshot (extraction rules):\n- name: Candidate's full name as written at the top or in the personal details. If multiple names appear, choose the one most clearly presented as the candidate.\n- email: Extract from contact details (look for patterns like something@domain.com). If no email is found, use null.\n- phone: Extract from contact details (local or international format). If no phone is found, use null.\n- linkedin: Extract any LinkedIn or portfolio URL if present. If missing, use null.\n- education: Highest attained degree and institution (e.g. \"BSc in Computer Science, University of Malaya\"). If only partial info is available, use the best concise description.\n- certifications: List only meaningful professional or industry certifications (e.g. \"AWS Certified Solutions Architect\"). If none, use an empty array [].\n- current_role: Most recent or current job title and company, if identifiable. If unemployed or unclear, use null.\n- years_of_experience: Approximate total years of professional experience. Use a number (e.g. 0, 1.5, 3, 7). If you truly cannot estimate, use 0.\n\nEvaluation Sections:\n1. professional_summary:\n   - Provide a concise 3–5 sentence overview of who this candidate is professionally, their main expertise, and their value proposition for the given role.\n\n2. skill_match:\n   - strong_matches: Skills (technical and soft) that clearly match the target role and are well supported by the resume.\n   - partial_matches: Skills that are related or lightly mentioned but not strongly demonstrated.\n   - gaps: Important skills typically required for this role that are missing or clearly weak.\n\n3. experience_relevance:\n   - Describe how relevant the candidate's previous roles, projects, and achievements are to the target role.\n   - Mention concrete responsibilities, tools, or industries where possible.\n\n4. strengths:\n   - List what stands out positively: achievements, progression, tools/tech stack, certifications, leadership, domain knowledge, etc.\n\n5. areas_of_concern:\n   - List potential risks or points needing clarification, such as employment gaps, lack of measurable impact, generic job descriptions, outdated tools, or unclear progression.\n   - Do NOT assume bad intent. Just highlight what may need to be asked in an interview.\n\n6. role_fit_score:\n   - A strict numeric score from 0 to 10 representing overall fit for the target role.\n   - Consider skill alignment, experience relevance, and resume clarity.\n\n7. score_justification:\n   - Clearly justify the score with both strengths and limitations.\n\nOUTPUT FORMAT (IMPORTANT)\n- Respond ONLY with valid JSON.\n- Do NOT include any explanations, comments, or additional text outside the JSON.\n- All strings must be double-quoted. No trailing commas. No comments.\n\nUse this exact JSON structure:\n\n{\n  \"candidate_snapshot\": {\n    \"name\": \"Full name or null\",\n    \"email\": \"email@example.com or null\",\n    \"phone\": \"phone number or null\",\n    \"linkedin\": \"profile URL or null\",\n    \"education\": \"Highest degree and institution or null\",\n    \"certifications\": [\"certification 1\", \"certification 2\"],\n    \"current_role\": \"Current or most recent role and company or null\",\n    \"years_of_experience\": 0\n  },\n  \"professional_summary\": \"3–5 sentence overview of the candidate and their value proposition.\",\n  \"skill_match\": {\n    \"strong_matches\": [\"clearly demonstrated skill 1\", \"clearly demonstrated skill 2\"],\n    \"partial_matches\": [\"partially demonstrated or related skill 1\"],\n    \"gaps\": [\"important missing or weak skill 1\"]\n  },\n  \"experience_relevance\": \"Description of how relevant prior roles/projects are to the target role.\",\n  \"strengths\": [\n    \"Notable strength 1\",\n    \"Notable strength 2\"\n  ],\n  \"areas_of_concern\": [\n    \"Potential concern or clarification point 1\",\n    \"Potential concern or clarification point 2\"\n  ],\n  \"role_fit_score\": 0,\n  \"score_justification\": \"Clear explanation for the numeric score, including both strengths and limitations.\"\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1376,
+        -96
+      ],
+      "id": "f041d6d1-9d99-4ade-9311-b2832c1da243",
+      "name": "AI Resume Analyzer",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.resumes",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        304,
+        -96
+      ],
+      "id": "b7ccc9ef-4a84-427d-8393-d014401f486b",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1712,
+        -96
+      ],
+      "id": "7f02c776-d013-42c4-ab0b-89fda726df60",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "let results = items.map(item => item.json);\n\n// Sort by highest score\nresults.sort((a, b) => b.role_fit_score - a.role_fit_score);\n\nreturn [{\n  json: {\n    role: $node[\"Webhook\"].json.body.role,\n    job_description: $node[\"Webhook\"].json.body.job_description,\n    results: results\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -96
+      ],
+      "id": "336416d8-6216-4312-b72c-24abb590dfd8",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "tableId": "resume_sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "role",
+              "fieldValue": "={{ $json.role }}"
+            },
+            {
+              "fieldId": "job_description",
+              "fieldValue": "={{ $json.job_description }}"
+            },
+            {
+              "fieldId": "results",
+              "fieldValue": "={{ $json.results }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        -96
+      ],
+      "id": "d7598146-9b59-4bd0-a23e-80b46eb46eaf",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "U5kHPdCm6yVkUQ40",
+          "name": "Fakhrul Supabase Service Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    session_id: $json.id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        -96
+      ],
+      "id": "07d989fa-8903-440f-8330-894bc9423f34",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e884b8c1-a128-44f2-9c7e-ff146853fe50",
+              "name": "candidate_id",
+              "value": "={{ $json.candidate_id }}",
+              "type": "string"
+            },
+            {
+              "id": "3fc8e784-4937-4692-bc9f-dcf7cd2887a6",
+              "name": "=resume_file_base64",
+              "value": "={{ $json.resume_file_base64 }}",
+              "type": "string"
+            },
+            {
+              "id": "c72415e8-50b0-49ca-8fb4-f1fd2bd8512e",
+              "name": "role",
+              "value": "={{ $('Webhook').item.json.body.role }}",
+              "type": "string"
+            },
+            {
+              "id": "15252f79-6b64-42df-9625-d7b588dab552",
+              "name": "job_description",
+              "value": "={{ $('Webhook').item.json.body.job_description }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        512,
+        -96
+      ],
+      "id": "ba4692c8-9473-4438-a30a-3a995a8fca45",
+      "name": "Edit Fields1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Binary Conversion Code": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Resume Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Resume Analyzer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Resume Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Binary Conversion Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "dfe1e943-fbc1-42aa-ab09-194fe488e58e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4eee722a1e8b79d1a74f33a59be8e00272d6ec5cd1fa4a70bd4b547f1008eddf"
+  },
+  "id": "Fj6smB2lVfTTR9Id",
+  "tags": []
+}
